@@ -1,103 +1,80 @@
-import os, io, re, asyncio, tempfile, time
-import edge_tts
 import gradio as gr
-from pydub import AudioSegment
+import asyncio
+import edge_tts
+from kokoro_onnx import Kokoro
+import soundfile as sf
+import tempfile
+import os
 
-VOICES = {
-    "বাংলা – নারী (Nabanita, ঢাকা)":   "bn-BD-NabanitaNeural",
-    "বাংলা – পুরুষ (Pradeep, ঢাকা)":   "bn-BD-PradeepNeural",
-    "বাংলা – নারী (Tanishaa, কলকাতা)": "bn-IN-TanishaaNeural",
-    "বাংলা – পুরুষ (Bashkar, কলকাতা)": "bn-IN-BashkarNeural",
-    "English – Female (Aria)":         "en-US-AriaNeural",
-    "English – Male (Guy)":            "en-US-GuyNeural",
-}
+# Initialize Kokoro TTS (Lightweight Model)
+try:
+    kokoro = Kokoro("kokoro-v0_19.onnx", "voices.bin")
+except Exception as e:
+    kokoro = None
 
+# Async function for Edge-TTS (Bengali)
+async def generate_edge_tts(text, voice, speed_pct):
+    speed_str = f"{speed_pct:+d}%"
+    communicate = edge_tts.Communicate(text, voice, rate=speed_str)
+    
+    with tempfile.NamedTemporaryFile(delete=False, suffix=".mp3") as tmp_file:
+        output_path = tmp_file.name
+        
+    await communicate.save(output_path)
+    return output_path
 
-def split_sentences(text: str):
-    parts = re.split(r'(?<=[।\.!\?])\s+', text.strip())
-    return [p.strip() for p in parts if p.strip()]
+# Main Generation Function
+def generate_voice(text, language, voice_choice, speed):
+    if not text.strip():
+        return None
+    
+    # English & Hindi using Kokoro-TTS
+    if language in ["English", "Hindi"]:
+        if kokoro is None:
+            return None
+        
+        speed_factor = 1.0 + (speed / 100.0)
+        voice_style = voice_choice.split(" ")[0]
+        
+        samples, sample_rate = kokoro.create(text, voice=voice_style, speed=speed_factor, lang="en-us" if language == "English" else "hi")
+        
+        with tempfile.NamedTemporaryFile(delete=False, suffix=".wav") as tmp_file:
+            output_path = tmp_file.name
+            sf.write(output_path, samples, sample_rate)
+            
+        return output_path
 
+    # Bengali using Edge-TTS
+    else:
+        edge_voice = "bn-BD-NabanitaNeural" if "Nabanita" in voice_choice else "bn-BD-PradeepNeural"
+        return asyncio.run(generate_edge_tts(text, edge_voice, speed))
 
-async def synth_once(text, voice, rate, pitch):
-    c = edge_tts.Communicate(text, voice, rate=rate, pitch=pitch, volume="+0%")
-    buf = b""
-    async for ch in c.stream():
-        if ch["type"] == "audio":
-            buf += ch["data"]
-    return buf
+# Dynamic Voice Options
+def update_voice_options(lang):
+    if lang == "English":
+        return gr.Dropdown(choices=["af_sarah (Female)", "am_adam (Male)", "bf_emma (British Female)"], value="af_sarah (Female)")
+    elif lang == "Hindi":
+        return gr.Dropdown(choices=["hf_alpha (Female)", "hm_omega (Male)"], value="hf_alpha (Female)")
+    else:
+        return gr.Dropdown(choices=["bn-BD-NabanitaNeural (Female)", "bn-BD-PradeepNeural (Male)"], value="bn-BD-NabanitaNeural (Female)")
 
-
-async def synth_retry(text, voice, rate, pitch, attempts=4):
-    last = ""
-    for i in range(attempts):
-        try:
-            data = await synth_once(text, voice, rate, pitch)
-            if data:
-                return data, ""
-            last = "সার্ভার খালি রেসপন্স দিয়েছে"
-        except Exception as e:
-            last = f"{type(e).__name__}: {e}"
-        await asyncio.sleep(0.8 * (i + 1))
-    return None, last
-
-
-async def generate(text, voice_name, rate_pct, pitch_hz, pause_ms, progress=gr.Progress()):
-    if not text or not text.strip():
-        raise gr.Error("টেক্সট লিখুন।")
-
-    text = text.replace("\u200b", "").replace("\ufeff", "").strip()
-    voice = VOICES[voice_name]
-    rate = f"{int(rate_pct):+d}%"
-    pitch = f"{int(pitch_hz):+d}Hz"
-
-    sentences = split_sentences(text)
-    if not sentences:
-        raise gr.Error("বৈধ কোনো বাক্য পাওয়া যায়নি।")
-
-    gap = AudioSegment.silent(duration=int(pause_ms))
-    combined = AudioSegment.empty()
-    ok, last_err = 0, ""
-
-    for i, s in enumerate(sentences):
-        progress((i + 1) / (len(sentences) + 1),
-                 desc=f"বাক্য {i + 1}/{len(sentences)} তৈরি হচ্ছে...")
-        data, err = await synth_retry(s, voice, rate, pitch)
-        if data is None:
-            last_err = err
-            continue
-        combined += AudioSegment.from_file(io.BytesIO(data), format="mp3")
-        if i < len(sentences) - 1:
-            combined += gap
-        ok += 1
-
-    if ok == 0:
-        raise gr.Error(
-            "কোনো বাক্যেরই অডিও পাওয়া যায়নি — মাইক্রোসফট সার্ভার সাময়িকভাবে ব্লক করেছে। "
-            f"কারণ: {last_err} | একটু পরে আবার Generate চাপুন।"
-        )
-
-    combined = combined.normalize()
-    out_path = os.path.join(tempfile.gettempdir(), f"voice_{int(time.time() * 1000)}.mp3")
-    combined.export(out_path, format="mp3", bitrate="192k")
-    return out_path
-
-
-with gr.Blocks(title="Voice Studio – Neural") as demo:
-    gr.Markdown("## 🎙️ Voice Studio — Neural AI (Tuned)")
+# Gradio Interface
+with gr.Blocks(theme=gr.themes.Soft()) as app:
+    gr.Markdown("# 🎙️ Multi-Engine AI Voice Studio")
+    
     with gr.Row():
-        voice_dd = gr.Dropdown(list(VOICES.keys()), value=list(VOICES.keys())[0], label="ভয়েস")
-    txt = gr.Textbox(lines=8, label="টেক্সট / স্ক্রিপ্ট")
-    with gr.Row():
-        rate_sl = gr.Slider(-30, 10, value=-10, step=1, label="Speed (%)  (− = ধীর, সাবলীল)")
-        pitch_sl = gr.Slider(-30, 30, value=0, step=1, label="Pitch (Hz)")
-        pause_sl = gr.Slider(0, 900, value=350, step=25, label="বাক্যের মাঝে বিরতি (ms)")
-    btn = gr.Button("🔊 Generate", variant="primary")
-    out_audio = gr.Audio(label="Output", type="filepath")
-    btn.click(generate, [txt, voice_dd, rate_sl, pitch_sl, pause_sl], out_audio)
+        lang_dropdown = gr.Dropdown(choices=["Bengali", "English", "Hindi"], value="Bengali", label="Language / ভাষা")
+        voice_dropdown = gr.Dropdown(choices=["bn-BD-NabanitaNeural (Female)", "bn-BD-PradeepNeural (Male)"], value="bn-BD-NabanitaNeural (Female)", label="Voice Accent")
+    
+    input_text = gr.Textbox(lines=4, placeholder="এখানে আপনার টেক্সট পেস্ট করুন...", label="Input Text")
+    speed_slider = gr.Slider(minimum=-30, maximum=30, value=-6, step=1, label="Speed Adjustment (%)")
+    
+    generate_btn = gr.Button("✨ Generate Real Voice", variant="primary")
+    audio_output = gr.Audio(label="Generated Audio", type="filepath")
 
+    lang_dropdown.change(fn=update_voice_options, inputs=lang_dropdown, outputs=voice_dropdown)
+    generate_btn.click(fn=generate_voice, inputs=[input_text, lang_dropdown, voice_dropdown, speed_slider], outputs=audio_output)
 
 if __name__ == "__main__":
-    demo.queue().launch(
-        server_name="0.0.0.0",
-        server_port=int(os.environ.get("PORT", 7860)),
-        )
+    port = int(os.environ.get("PORT", 7860))
+    app.launch(server_name="0.0.0.0", server_port=port)
