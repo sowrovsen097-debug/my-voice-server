@@ -6,6 +6,7 @@ import soundfile as sf
 import tempfile
 import os
 import urllib.request
+import re
 
 MODEL_URL = "https://github.com/thebloke/kokoro-onnx-models/releases/download/v0.19/kokoro-v0_19.onnx"
 VOICES_URL = "https://github.com/thebloke/kokoro-onnx-models/releases/download/v0.19/voices.bin"
@@ -24,6 +25,28 @@ def ensure_models():
 ensure_models()
 kokoro = Kokoro(MODEL_FILE, VOICES_FILE)
 
+def inject_hyper_emotions(text, emotion_level):
+    if not text:
+        return ""
+    
+    text = text.strip()
+    
+    # Emotion level based pause scaling
+    if emotion_level == 2: # Ultra Emotion
+        text = re.sub(r'(\!+)', r'! ... ', text)
+        text = re.sub(r'(\?+)', r'? ... ', text)
+        text = re.sub(r'(\.+)', r'... ', text)
+        text = re.sub(r'(\,)', r', ', text)
+        text = re.sub(r'(\-)', r' - ', text)
+    elif emotion_level == 1: # Deep Emotion
+        text = re.sub(r'(\!+)', r'! .. ', text)
+        text = re.sub(r'(\?+)', r'? .. ', text)
+        text = re.sub(r'(\.+)', r'.. ', text)
+        text = re.sub(r'(\,)', r', ', text)
+    
+    text = re.sub(r'\s+', ' ', text)
+    return text.strip()
+
 async def generate_edge_tts(text, voice, speed_pct):
     speed_str = f"{speed_pct:+d}%"
     communicate = edge_tts.Communicate(text, voice, rate=speed_str)
@@ -34,26 +57,24 @@ async def generate_edge_tts(text, voice, speed_pct):
     await communicate.save(output_path)
     return output_path
 
-def generate_voice(text, language, voice_choice, speed):
+def generate_voice(text, language, voice_choice, speed, emotion_intensity):
     if not text or not text.strip():
         return None
     
-    # Extract clean voice ID (e.g. "af_sarah" from "af_sarah | Expressive Female")
     voice_style = voice_choice.split(" ")[0].strip()
     
-    # Bengali -> Edge-TTS
+    enhanced_text = inject_hyper_emotions(text, emotion_intensity)
+    
     if language == "Bengali":
         edge_voice = "bn-BD-NabanitaNeural" if "Nabanita" in voice_choice else "bn-BD-PradeepNeural"
-        return asyncio.run(generate_edge_tts(text, edge_voice, speed))
-
-    # English & Hindi -> Pure Kokoro-TTS Engine
+        return asyncio.run(generate_edge_tts(enhanced_text, edge_voice, speed))
     else:
-        speed_factor = 1.0 + (speed / 100.0)
+        # Fine-tune speed & emotion intensity mapping
+        speed_factor = (1.0 + (speed / 100.0)) * (1.0 - (emotion_intensity * 0.06))
         lang_code = "en-us" if language == "English" else "hi"
         
-        # Audio generation with exact voice key
         samples, sample_rate = kokoro.create(
-            text, 
+            enhanced_text, 
             voice=voice_style, 
             speed=speed_factor, 
             lang=lang_code
@@ -65,26 +86,26 @@ def generate_voice(text, language, voice_choice, speed):
             
         return output_path
 
-# Dynamic Voice Mapping with High Expressive Voices
 def update_voice_options(lang):
     if lang == "English":
         return gr.Dropdown(
             choices=[
-                "af_sarah | Narrative Female (Expressive)", 
-                "af_bella | Emotional Female", 
-                "am_adam | Deep Male", 
-                "am_michael | Natural Male",
-                "bf_emma | British Female"
+                "af_bella | Ultra Emotional Female", 
+                "am_adam | Deep Cinematic Male", 
+                "af_sarah | Dramatic Narrative Female", 
+                "af_nicole | Soft Expressive Female",
+                "am_michael | Natural Dialogue Male",
+                "bf_emma | Expressive British Female"
             ], 
-            value="af_sarah | Narrative Female (Expressive)"
+            value="af_bella | Ultra Emotional Female"
         )
     elif lang == "Hindi":
         return gr.Dropdown(
             choices=[
-                "hf_alpha | Hindi Female", 
-                "hm_omega | Hindi Male"
+                "hf_alpha | Expressive Hindi Female", 
+                "hm_omega | Dramatic Hindi Male"
             ], 
-            value="hf_alpha | Hindi Female"
+            value="hf_alpha | Expressive Hindi Female"
         )
     else:
         return gr.Dropdown(
@@ -95,26 +116,39 @@ def update_voice_options(lang):
             value="bn-BD-NabanitaNeural (Female)"
         )
 
-# Gradio UI Design
 with gr.Blocks(theme=gr.themes.Soft()) as app:
-    gr.Markdown("# 🎙️ High-Fidelity Multi-Engine Voice Studio")
+    gr.Markdown("# 🎙️ ElevenLabs-Level Ultra-Emotional TTS Studio")
     
     with gr.Row():
-        lang_dropdown = gr.Dropdown(choices=["Bengali", "English", "Hindi"], value="Bengali", label="Language / ভাষা")
+        lang_dropdown = gr.Dropdown(choices=["Bengali", "English", "Hindi"], value="English", label="Language")
         voice_dropdown = gr.Dropdown(
-            choices=["bn-BD-NabanitaNeural (Female)", "bn-BD-PradeepNeural (Male)"], 
-            value="bn-BD-NabanitaNeural (Female)", 
+            choices=[
+                "af_bella | Ultra Emotional Female", 
+                "am_adam | Deep Cinematic Male", 
+                "af_sarah | Dramatic Narrative Female", 
+                "af_nicole | Soft Expressive Female",
+                "am_michael | Natural Dialogue Male",
+                "bf_emma | Expressive British Female"
+            ], 
+            value="af_bella | Ultra Emotional Female", 
             label="Voice Profile"
         )
     
-    input_text = gr.Textbox(lines=4, placeholder="এখানে আপনার টেক্সট পেস্ট করুন...", label="Input Text")
-    speed_slider = gr.Slider(minimum=-30, maximum=30, value=-5, step=1, label="Speed Adjustment (%)")
+    input_text = gr.Textbox(lines=5, placeholder="Enter your script with punctuation like '...', '!', ',' to shape emotions...", label="Input Script")
     
-    generate_btn = gr.Button("✨ Generate Voice", variant="primary")
+    with gr.Row():
+        speed_slider = gr.Slider(minimum=-30, maximum=30, value=-8, step=1, label="Speed Rate (%)")
+        emotion_slider = gr.Slider(minimum=0, maximum=2, value=2, step=1, label="Emotion Intensity (0: Normal, 1: Deep, 2: Ultra)")
+    
+    generate_btn = gr.Button("✨ Generate Hyper-Realistic Voice", variant="primary")
     audio_output = gr.Audio(label="Generated Audio", type="filepath")
 
     lang_dropdown.change(fn=update_voice_options, inputs=lang_dropdown, outputs=voice_dropdown)
-    generate_btn.click(fn=generate_voice, inputs=[input_text, lang_dropdown, voice_dropdown, speed_slider], outputs=audio_output)
+    generate_btn.click(
+        fn=generate_voice, 
+        inputs=[input_text, lang_dropdown, voice_dropdown, speed_slider, emotion_slider], 
+        outputs=audio_output
+    )
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 7860))
