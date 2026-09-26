@@ -5,21 +5,20 @@ import tempfile
 import os
 import re
 
-# Human Speech & Punctuation Pause Transformer
-def format_emotional_script(text, emotion_level):
+def inject_hyper_emotions(text, emotion_level):
     if not text:
         return ""
     
     text = text.strip()
     
-    # Emotion level based natural delay formatting
-    if emotion_level == 2: # Ultra Emotion
+    # Advanced Punctuation & Speech Modulation Transformer
+    if emotion_level == 2:  # Ultra Emotion Mode
         text = re.sub(r'(\!+)', r'! ... ', text)
         text = re.sub(r'(\?+)', r'? ... ', text)
         text = re.sub(r'(\.+)', r'... ', text)
         text = re.sub(r'(\,)', r', ', text)
         text = re.sub(r'(\-)', r' - ', text)
-    elif emotion_level == 1: # Deep Emotion
+    elif emotion_level == 1:  # Deep Emotion Mode
         text = re.sub(r'(\!+)', r'! .. ', text)
         text = re.sub(r'(\?+)', r'? .. ', text)
         text = re.sub(r'(\.+)', r'.. ', text)
@@ -28,19 +27,19 @@ def format_emotional_script(text, emotion_level):
     text = re.sub(r'\s+', ' ', text)
     return text.strip()
 
-# Voice Engine Async Generator
-async def generate_speech(text, voice, speed_pct, emotion_level):
+async def generate_speech(text, voice, speed_pct, pitch_pct, emotion_level):
     if not text or not text.strip():
         return None
 
-    # Apply emotion & pause transformation
-    formatted_text = format_emotional_script(text, emotion_level)
+    # Apply emotional punctuation tuning
+    formatted_text = inject_hyper_emotions(text, emotion_level)
     
-    # Format speed percentage
+    # Format speed and pitch strings
     speed_str = f"{speed_pct:+d}%"
+    pitch_str = f"{pitch_pct:+d}Hz"
     
-    # Create TTS instance
-    communicate = edge_tts.Communicate(formatted_text, voice, rate=speed_str)
+    # Communicate with Edge-TTS Engine
+    communicate = edge_tts.Communicate(formatted_text, voice, rate=speed_str, pitch=pitch_str)
     
     with tempfile.NamedTemporaryFile(delete=False, suffix=".mp3") as tmp_file:
         output_path = tmp_file.name
@@ -48,12 +47,10 @@ async def generate_speech(text, voice, speed_pct, emotion_level):
     await communicate.save(output_path)
     return output_path
 
-def process_tts(text, language, voice_choice, speed, emotion_intensity):
-    # Extract exact voice identifier
+def process_tts(text, language, voice_choice, speed, pitch, emotion_intensity):
     voice_id = voice_choice.split(" | ")[0].strip()
-    return asyncio.run(generate_speech(text, voice_id, speed, emotion_intensity))
+    return asyncio.run(generate_speech(text, voice_id, speed, pitch, emotion_intensity))
 
-# Dynamic Voice Selector
 def update_voice_options(lang):
     if lang == "English":
         return gr.Dropdown(
@@ -76,7 +73,7 @@ def update_voice_options(lang):
             ],
             value="bn-BD-NabanitaNeural | Expressive Bengali Female"
         )
-    else: # Hindi
+    else:  # Hindi
         return gr.Dropdown(
             choices=[
                 "hi-IN-SwaraNeural | Deep Expressive Hindi Female",
@@ -85,9 +82,9 @@ def update_voice_options(lang):
             value="hi-IN-SwaraNeural | Deep Expressive Hindi Female"
         )
 
-# Gradio Web Interface
+# Gradio Interface Application Setup
 with gr.Blocks(theme=gr.themes.Soft()) as app:
-    gr.Markdown("# 🎙️ ElevenLabs-Level Ultra-Emotional TTS Studio")
+    gr.Markdown("# 🎙️ Hyper-Realistic Ultra-Emotional TTS Studio")
     
     with gr.Row():
         lang_dropdown = gr.Dropdown(
@@ -110,12 +107,13 @@ with gr.Blocks(theme=gr.themes.Soft()) as app:
     
     input_text = gr.Textbox(
         lines=5, 
-        placeholder="Enter your script... Use '...', '!', ',' to shape timing, hesitation, and emotion.", 
+        placeholder="Enter your script here... Use '...', '!', '-' to control timing, hesitation, and expression.", 
         label="Input Script"
     )
     
     with gr.Row():
         speed_slider = gr.Slider(minimum=-30, maximum=30, value=-5, step=1, label="Speed Rate (%)")
+        pitch_slider = gr.Slider(minimum=-20, maximum=20, value=0, step=1, label="Pitch Modulation (Hz)")
         emotion_slider = gr.Slider(minimum=0, maximum=2, value=2, step=1, label="Emotion Intensity (0: Normal, 1: Deep, 2: Ultra)")
     
     generate_btn = gr.Button("✨ Generate Hyper-Realistic Voice", variant="primary")
@@ -125,7 +123,7 @@ with gr.Blocks(theme=gr.themes.Soft()) as app:
     
     generate_btn.click(
         fn=process_tts, 
-        inputs=[input_text, lang_dropdown, voice_dropdown, speed_slider, emotion_slider], 
+        inputs=[input_text, lang_dropdown, voice_dropdown, speed_slider, pitch_slider, emotion_slider], 
         outputs=audio_output
     )
 
