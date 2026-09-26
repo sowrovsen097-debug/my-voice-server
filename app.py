@@ -31,14 +31,13 @@ def inject_hyper_emotions(text, emotion_level):
     
     text = text.strip()
     
-    # Emotion level based pause scaling
-    if emotion_level == 2: # Ultra Emotion
+    if emotion_level == 2:
         text = re.sub(r'(\!+)', r'! ... ', text)
         text = re.sub(r'(\?+)', r'? ... ', text)
         text = re.sub(r'(\.+)', r'... ', text)
         text = re.sub(r'(\,)', r', ', text)
         text = re.sub(r'(\-)', r' - ', text)
-    elif emotion_level == 1: # Deep Emotion
+    elif emotion_level == 1:
         text = re.sub(r'(\!+)', r'! .. ', text)
         text = re.sub(r'(\?+)', r'? .. ', text)
         text = re.sub(r'(\.+)', r'.. ', text)
@@ -62,14 +61,12 @@ def generate_voice(text, language, voice_choice, speed, emotion_intensity):
         return None
     
     voice_style = voice_choice.split(" ")[0].strip()
-    
     enhanced_text = inject_hyper_emotions(text, emotion_intensity)
     
     if language == "Bengali":
         edge_voice = "bn-BD-NabanitaNeural" if "Nabanita" in voice_choice else "bn-BD-PradeepNeural"
         return asyncio.run(generate_edge_tts(enhanced_text, edge_voice, speed))
     else:
-        # Fine-tune speed & emotion intensity mapping
         speed_factor = (1.0 + (speed / 100.0)) * (1.0 - (emotion_intensity * 0.06))
         lang_code = "en-us" if language == "English" else "hi"
         
