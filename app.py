@@ -11,14 +11,13 @@ def inject_hyper_emotions(text, emotion_level):
     
     text = text.strip()
     
-    # Advanced Punctuation & Speech Modulation Transformer
-    if emotion_level == 2:  # Ultra Emotion Mode
+    if emotion_level == 2:
         text = re.sub(r'(\!+)', r'! ... ', text)
         text = re.sub(r'(\?+)', r'? ... ', text)
         text = re.sub(r'(\.+)', r'... ', text)
         text = re.sub(r'(\,)', r', ', text)
         text = re.sub(r'(\-)', r' - ', text)
-    elif emotion_level == 1:  # Deep Emotion Mode
+    elif emotion_level == 1:
         text = re.sub(r'(\!+)', r'! .. ', text)
         text = re.sub(r'(\?+)', r'? .. ', text)
         text = re.sub(r'(\.+)', r'.. ', text)
@@ -31,14 +30,10 @@ async def generate_speech(text, voice, speed_pct, pitch_pct, emotion_level):
     if not text or not text.strip():
         return None
 
-    # Apply emotional punctuation tuning
     formatted_text = inject_hyper_emotions(text, emotion_level)
-    
-    # Format speed and pitch strings
     speed_str = f"{speed_pct:+d}%"
     pitch_str = f"{pitch_pct:+d}Hz"
     
-    # Communicate with Edge-TTS Engine
     communicate = edge_tts.Communicate(formatted_text, voice, rate=speed_str, pitch=pitch_str)
     
     with tempfile.NamedTemporaryFile(delete=False, suffix=".mp3") as tmp_file:
@@ -73,7 +68,7 @@ def update_voice_options(lang):
             ],
             value="bn-BD-NabanitaNeural | Expressive Bengali Female"
         )
-    else:  # Hindi
+    else:
         return gr.Dropdown(
             choices=[
                 "hi-IN-SwaraNeural | Deep Expressive Hindi Female",
@@ -82,7 +77,6 @@ def update_voice_options(lang):
             value="hi-IN-SwaraNeural | Deep Expressive Hindi Female"
         )
 
-# Gradio Interface Application Setup
 with gr.Blocks(theme=gr.themes.Soft()) as app:
     gr.Markdown("# 🎙️ Hyper-Realistic Ultra-Emotional TTS Studio")
     
