@@ -8,19 +8,27 @@ import os
 import urllib.request
 import re
 
-MODEL_URL = "https://github.com/thebloke/kokoro-onnx-models/releases/download/v0.19/kokoro-v0_19.onnx"
-VOICES_URL = "https://github.com/thebloke/kokoro-onnx-models/releases/download/v0.19/voices.bin"
+# Official Direct HuggingFace Model Links (No 404 Error)
+MODEL_URL = "https://huggingface.co/hexgrad/Kokoro-82M/resolve/main/kokoro-v0_19.onnx"
+VOICES_URL = "https://huggingface.co/hexgrad/Kokoro-82M/resolve/main/voices.bin"
 
 MODEL_FILE = "kokoro-v0_19.onnx"
 VOICES_FILE = "voices.bin"
 
 def ensure_models():
+    headers = {'User-Agent': 'Mozilla/5.0'}
+    
     if not os.path.exists(MODEL_FILE):
         print("Downloading Kokoro ONNX Model...")
-        urllib.request.urlretrieve(MODEL_URL, MODEL_FILE)
+        req = urllib.request.Request(MODEL_URL, headers=headers)
+        with urllib.request.urlopen(req) as response, open(MODEL_FILE, 'wb') as out_file:
+            out_file.write(response.read())
+            
     if not os.path.exists(VOICES_FILE):
         print("Downloading Kokoro Voices Bin...")
-        urllib.request.urlretrieve(VOICES_URL, VOICES_FILE)
+        req = urllib.request.Request(VOICES_URL, headers=headers)
+        with urllib.request.urlopen(req) as response, open(VOICES_FILE, 'wb') as out_file:
+            out_file.write(response.read())
 
 ensure_models()
 kokoro = Kokoro(MODEL_FILE, VOICES_FILE)
