@@ -5,11 +5,28 @@ from kokoro_onnx import Kokoro
 import soundfile as sf
 import tempfile
 import os
+import urllib.request
 
-# Initialize Kokoro TTS (Lightweight Model)
+# Model files URL
+MODEL_URL = "https://github.com/thebloke/kokoro-onnx-models/releases/download/v0.19/kokoro-v0_19.onnx"
+VOICES_URL = "https://github.com/thebloke/kokoro-onnx-models/releases/download/v0.19/voices.bin"
+
+MODEL_FILE = "kokoro-v0_19.onnx"
+VOICES_FILE = "voices.bin"
+
+# Auto Download Kokoro Models if not present
+def download_file(url, destination):
+    if not os.path.exists(destination):
+        print(f"Downloading {destination}...")
+        urllib.request.urlretrieve(url, destination)
+        print(f"Downloaded {destination} successfully.")
+
 try:
-    kokoro = Kokoro("kokoro-v0_19.onnx", "voices.bin")
+    download_file(MODEL_URL, MODEL_FILE)
+    download_file(VOICES_URL, VOICES_FILE)
+    kokoro = Kokoro(MODEL_FILE, VOICES_FILE)
 except Exception as e:
+    print(f"Kokoro initialization error: {e}")
     kokoro = None
 
 # Async function for Edge-TTS (Bengali)
@@ -25,29 +42,41 @@ async def generate_edge_tts(text, voice, speed_pct):
 
 # Main Generation Function
 def generate_voice(text, language, voice_choice, speed):
-    if not text.strip():
+    if not text or not text.strip():
         return None
     
-    # English & Hindi using Kokoro-TTS
-    if language in ["English", "Hindi"]:
-        if kokoro is None:
-            return None
-        
-        speed_factor = 1.0 + (speed / 100.0)
-        voice_style = voice_choice.split(" ")[0]
-        
-        samples, sample_rate = kokoro.create(text, voice=voice_style, speed=speed_factor, lang="en-us" if language == "English" else "hi")
-        
-        with tempfile.NamedTemporaryFile(delete=False, suffix=".wav") as tmp_file:
-            output_path = tmp_file.name
-            sf.write(output_path, samples, sample_rate)
-            
-        return output_path
-
     # Bengali using Edge-TTS
-    else:
+    if language == "Bengali":
         edge_voice = "bn-BD-NabanitaNeural" if "Nabanita" in voice_choice else "bn-BD-PradeepNeural"
         return asyncio.run(generate_edge_tts(text, edge_voice, speed))
+
+    # English & Hindi using Kokoro-TTS
+    else:
+        if kokoro is None:
+            # Fallback to Edge-TTS if Kokoro fails
+            fallback_voice = "en-US-AvaNeural" if language == "English" else "hi-IN-SwaraNeural"
+            return asyncio.run(generate_edge_tts(text, fallback_voice, speed))
+        
+        try:
+            speed_factor = 1.0 + (speed / 100.0)
+            voice_style = voice_choice.split(" ")[0]
+            
+            samples, sample_rate = kokoro.create(
+                text, 
+                voice=voice_style, 
+                speed=speed_factor, 
+                lang="en-us" if language == "English" else "hi"
+            )
+            
+            with tempfile.NamedTemporaryFile(delete=False, suffix=".wav") as tmp_file:
+                output_path = tmp_file.name
+                sf.write(output_path, samples, sample_rate)
+                
+            return output_path
+        except Exception as e:
+            print(f"Error in Kokoro: {e}")
+            fallback_voice = "en-US-AvaNeural" if language == "English" else "hi-IN-SwaraNeural"
+            return asyncio.run(generate_edge_tts(text, fallback_voice, speed))
 
 # Dynamic Voice Options
 def update_voice_options(lang):
