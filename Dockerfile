@@ -1,25 +1,24 @@
-# Base Python image
 FROM python:3.10-slim
 
-# Install system dependencies (ffmpeg and build tools)
+# Install system dependencies & wget
 RUN apt-get update && apt-get install -y \
     ffmpeg \
     espeak-ng \
     build-essential \
+    wget \
     && rm -rf /var/lib/apt/lists/*
 
-# Set working directory
 WORKDIR /app
 
-# Copy requirements and install python packages
+# Pre-download Kokoro ONNX model and voices during build
+RUN wget -q https://github.com/thebloke/kokoro-onnx-models/releases/download/v0.19/kokoro-v0_19.onnx -O kokoro-v0_19.onnx
+RUN wget -q https://github.com/thebloke/kokoro-onnx-models/releases/download/v0.19/voices.bin -O voices.bin
+
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Copy all project files
 COPY . .
 
-# Expose port
 EXPOSE 7860
 
-# Run the app
 CMD ["python", "app.py"]
