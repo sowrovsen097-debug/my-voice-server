@@ -1,10 +1,8 @@
 FROM python:3.10-slim
 
-# Install system dependencies for audio processing
 RUN apt-get update && apt-get install -y \
     ffmpeg \
     espeak-ng \
-    build-essential \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
