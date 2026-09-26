@@ -5,7 +5,6 @@ import tempfile
 import os
 import re
 
-# Character limit constraint
 MAX_CHARS = 2000
 
 def inject_hyper_emotions(text, emotion_level):
@@ -83,7 +82,6 @@ def update_voice_options(lang):
             value="hi-IN-SwaraNeural | Deep Expressive Hindi Female"
         )
 
-# Custom CSS for Speechma-like UI Theme
 custom_css = """
 .container { max-width: 800px; margin: auto; }
 .generate-btn { background-color: #2563eb !important; color: white !important; font-weight: bold !important; font-size: 16px !important; border-radius: 8px !important; }
