@@ -1,5 +1,5 @@
 gradio
+edge-tts
 kokoro-onnx
 soundfile
 numpy
-edge-tts
