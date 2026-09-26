@@ -1,3 +1,5 @@
-edge-tts
 gradio
-pydub
+kokoro-onnx
+soundfile
+numpy
+edge-tts
