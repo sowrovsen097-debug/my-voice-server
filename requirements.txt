@@ -1,5 +1,3 @@
 gradio
 edge-tts
-kokoro-onnx
-soundfile
-numpy
+asyncio
